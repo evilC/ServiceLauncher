@@ -39,6 +39,7 @@
         </activity>
         <activity
             android:name=".ServiceLaunchActivity"
+            android:excludeFromRecents="true"
             android:exported="false"
             android:theme="@style/Theme.ServiceLauncher" />
         <receiver
