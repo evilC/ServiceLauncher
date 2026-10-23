@@ -151,12 +151,13 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
             }
         }
 
-        discoveryListener = listener
+        val mainThreadListener = listener.onHandler(mainHandler)
+        discoveryListener = mainThreadListener
         try {
             nsdManager.discoverServices(
                 ServiceWidgetSettings.SERVICE_TYPE,
                 NsdManager.PROTOCOL_DNS_SD,
-                listener
+                mainThreadListener
             )
             scanTimeout = Runnable {
                 stopScan()

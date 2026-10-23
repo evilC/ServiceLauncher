@@ -2,8 +2,8 @@ package com.example.servicelauncher
 
 import android.appwidget.AppWidgetManager
 import android.content.ActivityNotFoundException
+import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Build
@@ -16,6 +16,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.Inet6Address
@@ -39,6 +40,7 @@ class ServiceLaunchActivity : AppCompatActivity() {
     private lateinit var nsdManager: NsdManager
     private lateinit var serviceName: String
     private var discoveryListener: NsdManager.DiscoveryListener? = null
+    private var unregisterServiceInfoCallback: (() -> Unit)? = null
     private var timeout: Runnable? = null
     private var finished = false
 
@@ -106,12 +108,13 @@ class ServiceLaunchActivity : AppCompatActivity() {
             override fun onServiceLost(serviceInfo: NsdServiceInfo) = Unit
         }
 
-        discoveryListener = listener
+        val mainThreadListener = listener.onHandler(mainHandler)
+        discoveryListener = mainThreadListener
         try {
             nsdManager.discoverServices(
                 ServiceWidgetSettings.SERVICE_TYPE,
                 NsdManager.PROTOCOL_DNS_SD,
-                listener
+                mainThreadListener
             )
             setTimeout(SERVICE_LOOKUP_TIMEOUT_MS) {
                 fail(getString(R.string.service_not_found, serviceName))
@@ -127,26 +130,60 @@ class ServiceLaunchActivity : AppCompatActivity() {
         setTimeout(SERVICE_LOOKUP_TIMEOUT_MS) {
             fail(getString(R.string.service_resolution_failed, serviceName))
         }
-        try {
-            nsdManager.resolveService(service, object : NsdManager.ResolveListener {
-                override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val resolver = NsdServiceInfoResolver(
+                nsdManager,
+                ContextCompat.getMainExecutor(this),
+                service,
+                onUpdated = { serviceInfo ->
+                    if (!finished) {
+                        stopServiceInfoCallback()
+                        openResolvedService(serviceInfo)
+                    }
+                },
+                onLost = { fail(getString(R.string.service_not_found, serviceName)) },
+                onRegistrationFailed = {
                     fail(getString(R.string.service_resolution_failed, serviceName))
                 }
+            )
+            unregisterServiceInfoCallback = resolver::unregister
+            try {
+                resolver.register()
+            } catch (exception: IllegalArgumentException) {
+                fail(getString(R.string.service_resolution_failed, serviceName))
+            }
+            return
+        }
 
-                override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
-                    val addresses = resolvedAddresses(serviceInfo)
-                    val address = addresses.firstOrNull { it is Inet4Address }
-                        ?: addresses.firstOrNull()
-                    if (address == null || serviceInfo.port !in 1..65535) {
-                        fail(getString(R.string.service_resolution_failed, serviceName))
-                        return
+        try {
+            nsdManager.resolveService(
+                service,
+                object : NsdManager.ResolveListener {
+                    override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
+                        mainHandler.post {
+                            fail(getString(R.string.service_resolution_failed, serviceName))
+                        }
                     }
-                    openBrowser(ServiceEndpoint.url(address, serviceInfo.port))
+
+                    override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
+                        mainHandler.post { openResolvedService(serviceInfo) }
+                    }
                 }
-            })
+            )
         } catch (exception: IllegalArgumentException) {
             fail(getString(R.string.service_resolution_failed, serviceName))
         }
+    }
+
+    private fun openResolvedService(serviceInfo: NsdServiceInfo) {
+        val addresses = resolvedAddresses(serviceInfo)
+        val address = addresses.firstOrNull { it is Inet4Address }
+            ?: addresses.firstOrNull()
+        if (address == null || serviceInfo.port !in 1..65535) {
+            fail(getString(R.string.service_resolution_failed, serviceName))
+            return
+        }
+        openBrowser(ServiceEndpoint.url(address, serviceInfo.port))
     }
 
     @Suppress("DEPRECATION")
@@ -162,10 +199,7 @@ class ServiceLaunchActivity : AppCompatActivity() {
         finished = true
         clearTimeout()
         try {
-            startActivity(android.content.Intent(
-                android.content.Intent.ACTION_VIEW,
-                Uri.parse(url)
-            ))
+            startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
         } catch (_: ActivityNotFoundException) {
             Toast.makeText(this, R.string.no_browser_available, Toast.LENGTH_LONG).show()
         }
@@ -177,6 +211,7 @@ class ServiceLaunchActivity : AppCompatActivity() {
         finished = true
         clearTimeout()
         stopDiscovery()
+        stopServiceInfoCallback()
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
         finish()
     }
@@ -202,9 +237,21 @@ class ServiceLaunchActivity : AppCompatActivity() {
         }
     }
 
+    private fun stopServiceInfoCallback() {
+        unregisterServiceInfoCallback?.let { unregister ->
+            unregisterServiceInfoCallback = null
+            try {
+                unregister()
+            } catch (exception: IllegalArgumentException) {
+                Log.w(TAG, "Could not unregister HTTP service info callback", exception)
+            }
+        }
+    }
+
     override fun onDestroy() {
         clearTimeout()
         stopDiscovery()
+        stopServiceInfoCallback()
         super.onDestroy()
     }
 

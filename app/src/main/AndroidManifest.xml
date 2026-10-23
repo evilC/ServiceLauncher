@@ -32,7 +32,11 @@
             android:name=".ServiceWidgetConfigureActivity"
             android:exported="true"
             android:label="@string/widget_config_title"
-            android:theme="@style/Theme.ServiceLauncher" />
+            android:theme="@style/Theme.ServiceLauncher">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
         <activity
             android:name=".ServiceLaunchActivity"
             android:exported="false"

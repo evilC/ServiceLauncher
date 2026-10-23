@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
+import androidx.core.content.edit
 
 internal object ServiceWidgetSettings {
     const val SERVICE_TYPE = "_http._tcp."
@@ -24,10 +25,9 @@ class ServiceWidgetProvider : AppWidgetProvider() {
     }
 
     override fun onDeleted(context: Context, appWidgetIds: IntArray) {
-        val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-        preferences.edit().also { editor ->
-            appWidgetIds.forEach { editor.remove(ServiceWidgetSettings.serviceNameKey(it)) }
-        }.apply()
+        context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE).edit {
+            appWidgetIds.forEach { remove(ServiceWidgetSettings.serviceNameKey(it)) }
+        }
     }
 
     companion object {
@@ -35,9 +35,7 @@ class ServiceWidgetProvider : AppWidgetProvider() {
 
         fun saveServiceName(context: Context, widgetId: Int, serviceName: String) {
             context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
-                .edit()
-                .putString(ServiceWidgetSettings.serviceNameKey(widgetId), serviceName)
-                .apply()
+                .edit { putString(ServiceWidgetSettings.serviceNameKey(widgetId), serviceName) }
         }
 
         fun getServiceName(context: Context, widgetId: Int): String? =
