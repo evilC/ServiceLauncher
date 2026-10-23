@@ -48,11 +48,18 @@ class ServiceWidgetProvider : AppWidgetProvider() {
             widgetId: Int
         ) {
             val serviceName = getServiceName(context, widgetId)
-                ?: context.getString(R.string.widget_unconfigured)
             val views = RemoteViews(context.packageName, R.layout.widget_service)
-            views.setTextViewText(R.id.widget_service_name, serviceName)
+            views.setTextViewText(
+                R.id.widget_service_name,
+                serviceName ?: context.getString(R.string.widget_unconfigured)
+            )
 
-            val launchIntent = Intent(context, ServiceLaunchActivity::class.java)
+            val target = if (serviceName == null) {
+                ServiceWidgetConfigureActivity::class.java
+            } else {
+                ServiceLaunchActivity::class.java
+            }
+            val launchIntent = Intent(context, target)
                 .putExtra(ServiceWidgetSettings.EXTRA_WIDGET_ID, widgetId)
             val pendingIntent = PendingIntent.getActivity(
                 context,

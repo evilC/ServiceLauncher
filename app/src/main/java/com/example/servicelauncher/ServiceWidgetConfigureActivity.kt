@@ -195,7 +195,7 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
             Activity.RESULT_OK,
             Intent().putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId)
         )
-        finish()
+        finishAndRemoveTask()
     }
 
     override fun onDestroy() {

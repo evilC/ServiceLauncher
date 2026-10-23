@@ -1,5 +1,8 @@
 <resources>
     <string name="app_name">Service Launcher</string>
+    <string name="main_description">Add a widget that opens a service on your local network with one tap.</string>
+    <string name="add_to_home_screen">Add to home screen</string>
+    <string name="pin_widget_unsupported">Your launcher cannot add widgets from here. Long-press the home screen and choose Widgets.</string>
     <string name="widget_config_title">Choose a service</string>
     <string name="widget_description">Open a discovered HTTP service</string>
     <string name="widget_config_instructions">Choose an HTTP service</string>
