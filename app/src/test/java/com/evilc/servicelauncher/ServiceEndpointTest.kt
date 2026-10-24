@@ -1,4 +1,4 @@
-package com.example.servicelauncher
+package com.evilc.servicelauncher
 
 import java.net.Inet6Address
 import java.net.InetAddress

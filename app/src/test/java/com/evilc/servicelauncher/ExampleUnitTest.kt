@@ -1,4 +1,4 @@
-package com.example.servicelauncher
+package com.evilc.servicelauncher
 
 import org.junit.Test
 

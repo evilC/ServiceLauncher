@@ -1,4 +1,4 @@
-package com.example.servicelauncher
+package com.evilc.servicelauncher
 
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo

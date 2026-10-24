@@ -3,13 +3,13 @@ plugins {
 }
 
 android {
-    namespace = "com.example.servicelauncher"
+    namespace = "com.evilc.servicelauncher"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.example.servicelauncher"
+        applicationId = "com.evilc.servicelauncher"
         minSdk = 26
         targetSdk = 37
         versionCode = 1

@@ -1,4 +1,4 @@
-package com.example.servicelauncher
+package com.evilc.servicelauncher
 
 internal object TextFit {
     // Returns Int.MAX_VALUE if any single word is wider than the line.

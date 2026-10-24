@@ -1,4 +1,4 @@
-package com.example.servicelauncher
+package com.evilc.servicelauncher
 
 import android.appwidget.AppWidgetManager
 import android.content.ActivityNotFoundException

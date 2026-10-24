@@ -1,4 +1,4 @@
-package com.example.servicelauncher
+package com.evilc.servicelauncher
 
 /** Default texts advertised by a service in its DNS-SD TXT record. */
 internal data class ServiceMetadata(val widgetText: String?, val iconText: String?, val iconLabel: String?) {
