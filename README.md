@@ -20,6 +20,9 @@ Even if the button did appear, I would need to open the app, navigate the UI, an
 Yeah... sod that for a game of soldiers when you are wasted in a dark and loud nightclub.  
 So... I made this app. I set up DNS-SD on the pi to advertise a "WearWare UI" service announcing that it is HTTP on port 5000, and I can add a shortcut icon to my phone's home screen that connects to the pi's web server with a single tap, without needing to know the IP address.
 
+## Disclaimer
+This app is 100% vibe coded. I did not write a single line of the code myself.
+
 ### DNS-SD custom fields
 The default text and labels for widgets and shortcuts can be controlled by the device by using custom `txt-record` entries in the DNS-SD service advertisement.  
 
