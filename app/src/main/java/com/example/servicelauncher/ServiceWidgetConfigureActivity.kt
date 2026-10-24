@@ -47,6 +47,9 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
     private lateinit var saveButton: Button
     private lateinit var nsdManager: NsdManager
     private var selectedName: String? = null
+    private var metadata = ServiceMetadata(null, null, null)
+    private var metadataFor: String? = null
+    private var stopMetadataLookup: (() -> Unit)? = null
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
     private var shortcutMode = false
     private lateinit var sizeTitle: TextView
@@ -90,14 +93,87 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
     }
 
     private fun selectService(name: String) {
-        val previous = selectedName
+        val previousDefault = defaultLabel()
+        if (name != selectedName) {
+            stopMetadataLookup?.invoke()
+            stopMetadataLookup = null
+            metadataFor = null
+            metadata = ServiceMetadata(null, null, null)
+        }
         selectedName = name
         setFormEnabled(true)
         val current = labelInput.text.toString()
-        if (current.isBlank() || current == previous) {
-            labelInput.setText(name)
+        if (current.isBlank() || current == previousDefault) {
+            labelInput.setText(defaultLabel())
         }
         syncChecked()
+        lookUpMetadata()
+    }
+
+    private fun defaultLabel() =
+        (if (shortcutMode) metadata.iconLabel else metadata.widgetText) ?: selectedName.orEmpty()
+
+    private fun defaultIconText() =
+        metadata.iconText ?: ServiceShortcuts.initials(labelInput.text.toString())
+
+    private fun resetIconText() {
+        iconTextEdited = false
+        updatingIconText = true
+        iconTextInput.setText(defaultIconText())
+        updatingIconText = false
+    }
+
+    @Suppress("DEPRECATION")
+    private fun lookUpMetadata() {
+        val name = selectedName ?: return
+        val service = services.firstOrNull { it.serviceName == name } ?: return
+        if (metadataFor == name) return
+        metadataFor = name
+
+        fun deliver(info: NsdServiceInfo) {
+            if (selectedName != name) return
+            val previousLabel = defaultLabel()
+            metadata = ServiceMetadata.from(info.attributes)
+            if (labelInput.text.isBlank() || labelInput.text.toString() == previousLabel) {
+                labelInput.setText(defaultLabel())
+            }
+            if (shortcutMode && !iconTextEdited) resetIconText()
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            lateinit var resolver: NsdServiceInfoResolver
+            resolver = NsdServiceInfoResolver(
+                nsdManager,
+                ContextCompat.getMainExecutor(this),
+                service,
+                onUpdated = { info ->
+                    stopMetadataLookup?.invoke()
+                    stopMetadataLookup = null
+                    deliver(info)
+                },
+                onLost = {},
+                onRegistrationFailed = {}
+            )
+            try {
+                resolver.register()
+                stopMetadataLookup = resolver::unregister
+            } catch (exception: IllegalArgumentException) {
+                Log.w(TAG, "Could not read service attributes", exception)
+            }
+            return
+        }
+
+        try {
+            nsdManager.resolveService(service, object : NsdManager.ResolveListener {
+                override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) = Unit
+
+                override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
+                    mainHandler.post { deliver(serviceInfo) }
+                }
+            })
+        } catch (exception: IllegalArgumentException) {
+            Log.w(TAG, "Could not read service attributes", exception)
+        }
     }
 
     private fun setFormEnabled(enabled: Boolean) {
@@ -183,7 +259,7 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
             configForm.body().addView(fieldRow(R.string.label_title, labelInput))
             configForm.body().addView(Button(this@ServiceWidgetConfigureActivity).apply {
                 setText(R.string.reset)
-                setOnClickListener { selectedName?.let(labelInput::setText) }
+                setOnClickListener { labelInput.setText(defaultLabel()) }
             })
             if (shortcutMode) {
                 iconTextInput = EditText(this@ServiceWidgetConfigureActivity).apply {
@@ -205,12 +281,8 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
                 configForm.body().addView(fieldRow(R.string.icon_text_title, iconTextInput))
                 configForm.body().addView(Button(this@ServiceWidgetConfigureActivity).apply {
                     setText(R.string.reset)
-                    setOnClickListener {
-                        iconTextEdited = false
-                        updatingIconText = true
-                        iconTextInput.setText(ServiceShortcuts.initials(labelInput.text.toString()))
-                        updatingIconText = false
-                    }
+                    setOnClickListener { resetIconText() }
+
                 })
             }
             sizeTitle = TextView(this@ServiceWidgetConfigureActivity).apply {
@@ -330,6 +402,7 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
                     adapter.add(serviceInfo.serviceName)
                     status.visibility = View.GONE
                     syncChecked()
+                    lookUpMetadata()
                 }
             }
 
@@ -418,6 +491,7 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         stopScan()
+        stopMetadataLookup?.invoke()
         super.onDestroy()
     }
 
