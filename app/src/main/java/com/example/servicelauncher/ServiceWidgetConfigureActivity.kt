@@ -11,7 +11,10 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.graphics.Typeface
 import android.view.View
+import android.view.ViewGroup
+import androidx.core.view.children
 import android.text.InputType
 import android.view.Gravity
 import android.widget.ArrayAdapter
@@ -25,6 +28,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.widget.addTextChangedListener
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 
@@ -34,8 +38,11 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
     private lateinit var status: TextView
     private lateinit var adapter: ArrayAdapter<String>
     private lateinit var list: ListView
-    private lateinit var selectedView: TextView
+    private lateinit var configForm: LinearLayout
     private lateinit var labelInput: EditText
+    private lateinit var iconTextInput: EditText
+    private var iconTextEdited = false
+    private var updatingIconText = false
     private lateinit var sizeSpinner: Spinner
     private lateinit var saveButton: Button
     private lateinit var nsdManager: NsdManager
@@ -51,7 +58,7 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
             if (granted) {
                 startScan()
             } else {
-                status.setText(R.string.local_network_permission_required)
+                showStatus(R.string.local_network_permission_required)
             }
         }
 
@@ -85,13 +92,28 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
     private fun selectService(name: String) {
         val previous = selectedName
         selectedName = name
-        selectedView.text = getString(R.string.selected_service, name)
-        saveButton.isEnabled = true
+        setFormEnabled(true)
         val current = labelInput.text.toString()
         if (current.isBlank() || current == previous) {
             labelInput.setText(name)
         }
         syncChecked()
+    }
+
+    private fun setFormEnabled(enabled: Boolean) {
+        saveButton.isEnabled = enabled
+        configForm.alpha = if (enabled) 1f else 0.4f
+        configForm.setEnabledRecursively(enabled)
+    }
+
+    private fun View.setEnabledRecursively(enabled: Boolean) {
+        isEnabled = enabled
+        if (this is ViewGroup) children.forEach { it.setEnabledRecursively(enabled) }
+    }
+
+    private fun showStatus(textRes: Int) {
+        status.setText(textRes)
+        status.visibility = View.VISIBLE
     }
 
     private fun syncChecked() {
@@ -117,15 +139,17 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
                 WindowInsetsCompat.CONSUMED
             }
 
-            addView(TextView(this@ServiceWidgetConfigureActivity).apply {
-                setText(R.string.widget_config_instructions)
-                textSize = 20f
-            })
+            val servicePanel = panel(R.string.service_panel_title, fill = true)
+            addView(servicePanel, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+            ))
             status = TextView(this@ServiceWidgetConfigureActivity).apply {
                 setText(R.string.searching_for_services)
                 setPadding(0, padding / 2, 0, padding / 2)
             }
-            addView(status)
+            servicePanel.body().addView(status)
 
             adapter = ArrayAdapter(
                 this@ServiceWidgetConfigureActivity,
@@ -139,38 +163,61 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
                     selectService(services[position].serviceName)
                 }
             }
-            addView(list, LinearLayout.LayoutParams(
+            servicePanel.body().addView(list, LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 0,
                 1f
             ))
-            addView(Button(this@ServiceWidgetConfigureActivity).apply {
+            servicePanel.body().addView(Button(this@ServiceWidgetConfigureActivity).apply {
                 setText(R.string.scan_again)
                 setOnClickListener { requestPermissionOrScan() }
             })
 
-            selectedView = TextView(this@ServiceWidgetConfigureActivity).apply {
-                setText(R.string.no_service_selected)
-                setPadding(0, padding / 2, 0, 0)
-            }
-            addView(selectedView)
+            configForm = panel(R.string.settings_panel_title)
             labelInput = EditText(this@ServiceWidgetConfigureActivity).apply {
-                setHint(R.string.label_hint)
                 inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
                 minLines = 2
                 maxLines = 4
                 gravity = Gravity.TOP
             }
-            addView(labelInput)
-            addView(Button(this@ServiceWidgetConfigureActivity).apply {
-                setText(R.string.reset_label)
+            configForm.body().addView(fieldRow(R.string.label_title, labelInput))
+            configForm.body().addView(Button(this@ServiceWidgetConfigureActivity).apply {
+                setText(R.string.reset)
                 setOnClickListener { selectedName?.let(labelInput::setText) }
             })
+            if (shortcutMode) {
+                iconTextInput = EditText(this@ServiceWidgetConfigureActivity).apply {
+                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                    minLines = 2
+                    maxLines = 4
+                    gravity = Gravity.TOP
+                    addTextChangedListener {
+                        if (!updatingIconText) iconTextEdited = true
+                    }
+                }
+                labelInput.addTextChangedListener {
+                    if (!iconTextEdited) {
+                        updatingIconText = true
+                        iconTextInput.setText(ServiceShortcuts.initials(labelInput.text.toString()))
+                        updatingIconText = false
+                    }
+                }
+                configForm.body().addView(fieldRow(R.string.icon_text_title, iconTextInput))
+                configForm.body().addView(Button(this@ServiceWidgetConfigureActivity).apply {
+                    setText(R.string.reset)
+                    setOnClickListener {
+                        iconTextEdited = false
+                        updatingIconText = true
+                        iconTextInput.setText(ServiceShortcuts.initials(labelInput.text.toString()))
+                        updatingIconText = false
+                    }
+                })
+            }
             sizeTitle = TextView(this@ServiceWidgetConfigureActivity).apply {
                 setText(R.string.text_size_title)
                 setPadding(0, padding / 2, 0, 0)
             }
-            addView(sizeTitle)
+            configForm.body().addView(sizeTitle)
             sizeSpinner = Spinner(this@ServiceWidgetConfigureActivity).apply {
                 adapter = ArrayAdapter(
                     this@ServiceWidgetConfigureActivity,
@@ -178,11 +225,15 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
                     WidgetTextSize.entries.map { getString(it.labelRes) }
                 )
             }
-            addView(sizeSpinner)
+            configForm.body().addView(sizeSpinner)
             if (shortcutMode) {
                 sizeTitle.visibility = View.GONE
                 sizeSpinner.visibility = View.GONE
             }
+            addView(configForm, LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply { topMargin = padding / 2; bottomMargin = padding / 2 })
             saveButton = Button(this@ServiceWidgetConfigureActivity).apply {
                 setText(if (shortcutMode) R.string.create_icon else R.string.save_widget)
                 isEnabled = false
@@ -202,7 +253,41 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
                 }, weight)
                 addView(saveButton, weight)
             })
+            setFormEnabled(false)
         }
+    }
+
+    private fun panel(titleRes: Int, fill: Boolean = false) = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        val inner = (12 * resources.displayMetrics.density).toInt()
+        setBackgroundResource(R.drawable.panel_background)
+        addView(TextView(context).apply {
+            setText(titleRes)
+            textSize = 18f
+            setTypeface(typeface, Typeface.BOLD)
+            setBackgroundResource(R.drawable.panel_header_background)
+            setPadding(inner, inner / 2, inner, inner / 2)
+        })
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(inner, inner / 2, inner, inner)
+        }, LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            if (fill) 0 else LinearLayout.LayoutParams.WRAP_CONTENT,
+            if (fill) 1f else 0f
+        ))
+    }
+
+    private fun LinearLayout.body() = getChildAt(1) as LinearLayout
+    private fun fieldRow(titleRes: Int, input: EditText) = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        val titleWidth = (90 * resources.displayMetrics.density).toInt()
+        addView(TextView(context).apply {
+            setText(titleRes)
+            gravity = Gravity.TOP
+            setPadding(0, input.paddingTop, 0, 0)
+        }, LinearLayout.LayoutParams(titleWidth, LinearLayout.LayoutParams.WRAP_CONTENT))
+        addView(input, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
     }
 
     private fun requestPermissionOrScan() {
@@ -222,19 +307,19 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
         stopScan()
         services.clear()
         adapter.clear()
-        status.setText(R.string.searching_for_services)
+        showStatus(R.string.searching_for_services)
 
         val listener = object : NsdManager.DiscoveryListener {
             override fun onDiscoveryStarted(serviceType: String) = Unit
 
             override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
                 stopScan()
-                status.setText(R.string.service_scan_failed)
+                showStatus(R.string.service_scan_failed)
             }
 
             override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
                 discoveryListener = null
-                status.setText(R.string.service_scan_failed)
+                showStatus(R.string.service_scan_failed)
             }
 
             override fun onDiscoveryStopped(serviceType: String) = Unit
@@ -243,7 +328,7 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
                 if (services.none { it.serviceName == serviceInfo.serviceName }) {
                     services += serviceInfo
                     adapter.add(serviceInfo.serviceName)
-                    status.setText(R.string.select_a_service)
+                    status.visibility = View.GONE
                     syncChecked()
                 }
             }
@@ -255,7 +340,7 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
                     adapter.remove(serviceInfo.serviceName)
                     syncChecked()
                     if (services.isEmpty()) {
-                        status.setText(R.string.searching_for_services)
+                        showStatus(R.string.searching_for_services)
                     }
                 }
             }
@@ -272,12 +357,12 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
             scanTimeout = Runnable {
                 stopScan()
                 if (services.isEmpty()) {
-                    status.setText(R.string.no_services_found)
+                    showStatus(R.string.no_services_found)
                 }
             }.also { mainHandler.postDelayed(it, SCAN_TIMEOUT_MS) }
         } catch (exception: IllegalArgumentException) {
             discoveryListener = null
-            status.setText(R.string.service_scan_failed)
+            showStatus(R.string.service_scan_failed)
         }
     }
 
@@ -290,7 +375,7 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
                 nsdManager.stopServiceDiscovery(listener)
             } catch (exception: IllegalArgumentException) {
                 Log.w(TAG, "Could not stop HTTP service discovery", exception)
-                status.setText(R.string.service_scan_failed)
+                showStatus(R.string.service_scan_failed)
             }
         }
     }
@@ -301,7 +386,12 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
     private fun createPinnedShortcut() {
         val name = selectedName ?: return
         if (ServiceShortcuts.isPinSupported(this) &&
-            ServiceShortcuts.requestPin(this, name, shortcutLabel(name))
+            ServiceShortcuts.requestPin(
+                this,
+                name,
+                shortcutLabel(name),
+                iconTextInput.text.toString().trim()
+            )
         ) {
             stopScan()
             finishAndRemoveTask()

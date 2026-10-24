@@ -120,36 +120,17 @@ class ServiceWidgetProvider : AppWidgetProvider() {
             val availableWidth = (widthDp - WIDGET_PADDING_DP - CORNER_INSET_DP) * density
             val availableHeight = (heightDp - WIDGET_PADDING_DP) * density
             val paint = Paint().apply { typeface = Typeface.DEFAULT_BOLD }
+            val scale = context.resources.displayMetrics.scaledDensity
 
-            for (sp in AUTO_MAX_SP.toInt() downTo AUTO_MIN_SP.toInt()) {
-                paint.textSize = sp * context.resources.displayMetrics.scaledDensity
-                if (wrappedLineCount(text, paint, availableWidth) * paint.fontSpacing <= availableHeight) {
-                    return sp.toFloat()
-                }
-            }
-            return AUTO_MIN_SP
-        }
-
-        // Returns Int.MAX_VALUE if any single word is wider than the line.
-        private fun wrappedLineCount(text: String, paint: Paint, width: Float): Int {
-            var lines = 0
-            for (line in text.split('\n')) {
-                var current = 0f
-                var count = 1
-                for (word in line.split(' ').filter { it.isNotEmpty() }) {
-                    val wordWidth = paint.measureText(word)
-                    if (wordWidth > width) return Int.MAX_VALUE
-                    val next = if (current == 0f) wordWidth else current + paint.measureText(" $word")
-                    if (next > width) {
-                        count++
-                        current = wordWidth
-                    } else {
-                        current = next
-                    }
-                }
-                lines += count
-            }
-            return lines
+            return TextFit.largestSize(
+                text,
+                AUTO_MIN_SP.toInt(),
+                AUTO_MAX_SP.toInt(),
+                availableWidth,
+                availableHeight,
+                lineHeight = { sp -> paint.textSize = sp * scale; paint.fontSpacing },
+                measure = { sp, word -> paint.textSize = sp * scale; paint.measureText(word) }
+            ).toFloat()
         }
 
         fun updateWidget(
