@@ -16,10 +16,23 @@
         android:text="@string/main_description"
         android:textSize="16sp" />
 
-    <Button
-        android:id="@+id/add_widget_button"
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="24dp"
-        android:text="@string/add_to_home_screen" />
+        android:orientation="vertical">
+
+        <Button
+            android:id="@+id/add_widget_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/add_to_home_screen" />
+
+        <Button
+            android:id="@+id/add_shortcut_button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/add_shortcut" />
+    </LinearLayout>
 </LinearLayout>

@@ -23,6 +23,12 @@ class MainActivity : AppCompatActivity() {
             insets
         }
         findViewById<View>(R.id.add_widget_button).setOnClickListener { requestPinWidget() }
+        findViewById<View>(R.id.add_shortcut_button).setOnClickListener {
+            startActivity(
+                Intent(this, ServiceWidgetConfigureActivity::class.java)
+                    .putExtra(ServiceWidgetSettings.EXTRA_SHORTCUT_MODE, true)
+            )
+        }
     }
 
     private fun requestPinWidget() {

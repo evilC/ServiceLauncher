@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">Service Launcher</string>
-    <string name="main_description">Add a widget that opens a service on your local network with one tap.</string>
-    <string name="add_to_home_screen">Add to home screen</string>
+    <string name="main_description">Add a widget or a shortcut that opens a service on your local network with one tap.</string>
+    <string name="add_to_home_screen">Add widget</string>
     <string name="pin_widget_unsupported">Your launcher cannot add widgets from here. Long-press the home screen and choose Widgets.</string>
     <string name="widget_config_title">Choose a service</string>
     <string name="widget_description">Open a discovered HTTP service</string>
@@ -19,6 +19,9 @@
     <string name="text_size_medium">Medium</string>
     <string name="text_size_large">Large</string>
     <string name="save_widget">Save widget</string>
+    <string name="create_icon">Create shortcut</string>
+    <string name="pin_shortcut_unsupported">This launcher does not support adding shortcuts</string>
+    <string name="add_shortcut">Add shortcut</string>
     <string name="cancel">Cancel</string>
     <string name="reset_label">Reset to service name</string>
     <string name="no_services_found">No HTTP services found. Check the hotspot connection and scan again.</string>

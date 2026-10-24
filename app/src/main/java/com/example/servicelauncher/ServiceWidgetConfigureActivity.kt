@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.view.View
 import android.text.InputType
 import android.view.Gravity
 import android.widget.ArrayAdapter
@@ -40,6 +41,8 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
     private lateinit var nsdManager: NsdManager
     private var selectedName: String? = null
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
+    private var shortcutMode = false
+    private lateinit var sizeTitle: TextView
     private var discoveryListener: NsdManager.DiscoveryListener? = null
     private var scanTimeout: Runnable? = null
 
@@ -56,18 +59,19 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setResult(Activity.RESULT_CANCELED)
 
+        shortcutMode = intent.getBooleanExtra(ServiceWidgetSettings.EXTRA_SHORTCUT_MODE, false)
         widgetId = intent.getIntExtra(
             AppWidgetManager.EXTRA_APPWIDGET_ID,
             AppWidgetManager.INVALID_APPWIDGET_ID
         )
-        if (widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
+        if (!shortcutMode && widgetId == AppWidgetManager.INVALID_APPWIDGET_ID) {
             finish()
             return
         }
 
         nsdManager = getSystemService(NsdManager::class.java)
         setContentView(createContentView())
-        loadExistingSettings()
+        if (!shortcutMode) loadExistingSettings()
         requestPermissionOrScan()
     }
 
@@ -162,10 +166,11 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
                 setText(R.string.reset_label)
                 setOnClickListener { selectedName?.let(labelInput::setText) }
             })
-            addView(TextView(this@ServiceWidgetConfigureActivity).apply {
+            sizeTitle = TextView(this@ServiceWidgetConfigureActivity).apply {
                 setText(R.string.text_size_title)
                 setPadding(0, padding / 2, 0, 0)
-            })
+            }
+            addView(sizeTitle)
             sizeSpinner = Spinner(this@ServiceWidgetConfigureActivity).apply {
                 adapter = ArrayAdapter(
                     this@ServiceWidgetConfigureActivity,
@@ -174,10 +179,16 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
                 )
             }
             addView(sizeSpinner)
+            if (shortcutMode) {
+                sizeTitle.visibility = View.GONE
+                sizeSpinner.visibility = View.GONE
+            }
             saveButton = Button(this@ServiceWidgetConfigureActivity).apply {
-                setText(R.string.save_widget)
+                setText(if (shortcutMode) R.string.create_icon else R.string.save_widget)
                 isEnabled = false
-                setOnClickListener { completeConfiguration() }
+                setOnClickListener {
+                    if (shortcutMode) createPinnedShortcut() else completeConfiguration()
+                }
             }
             addView(LinearLayout(this@ServiceWidgetConfigureActivity).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -281,6 +292,21 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
                 Log.w(TAG, "Could not stop HTTP service discovery", exception)
                 status.setText(R.string.service_scan_failed)
             }
+        }
+    }
+
+    private fun shortcutLabel(name: String) =
+        labelInput.text.toString().trim().replace(Regex("\\s+"), " ").ifEmpty { name }
+
+    private fun createPinnedShortcut() {
+        val name = selectedName ?: return
+        if (ServiceShortcuts.isPinSupported(this) &&
+            ServiceShortcuts.requestPin(this, name, shortcutLabel(name))
+        ) {
+            stopScan()
+            finishAndRemoveTask()
+        } else {
+            Toast.makeText(this, R.string.pin_shortcut_unsupported, Toast.LENGTH_LONG).show()
         }
     }
 

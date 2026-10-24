@@ -28,6 +28,8 @@ enum class WidgetTextSize(@StringRes val labelRes: Int, val sp: Float?) {
 internal object ServiceWidgetSettings {
     const val SERVICE_TYPE = "_http._tcp."
     const val EXTRA_WIDGET_ID = AppWidgetManager.EXTRA_APPWIDGET_ID
+    const val EXTRA_SERVICE_NAME = "service_name"
+    const val EXTRA_SHORTCUT_MODE = "shortcut_mode"
 
     fun serviceNameKey(widgetId: Int) = "service_name_$widgetId"
     fun labelKey(widgetId: Int) = "label_$widgetId"

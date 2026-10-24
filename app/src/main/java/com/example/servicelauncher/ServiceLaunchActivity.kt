@@ -65,7 +65,8 @@ class ServiceLaunchActivity : AppCompatActivity() {
             AppWidgetManager.EXTRA_APPWIDGET_ID,
             AppWidgetManager.INVALID_APPWIDGET_ID
         )
-        serviceName = ServiceWidgetProvider.getServiceName(this, widgetId)
+        serviceName = intent.getStringExtra(ServiceWidgetSettings.EXTRA_SERVICE_NAME)
+            ?: ServiceWidgetProvider.getServiceName(this, widgetId)
             ?: run {
                 fail(getString(R.string.widget_service_not_configured))
                 return
