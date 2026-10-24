@@ -11,7 +11,7 @@ The IP and port are resolved at the point that you click the shortcut / widget, 
 ## Why does this exist?
 I designed and built my own LED screen T-Shirt (See the [WearWare](https://github.com/evilC/WearWare) project) which I wear to nightclubs.    
 This is a Raspberry Pi running a web server that serves a web-based UI for controlling the shirt.  
-Historically, to control the shirt, I would connect my phone to the Pi's WiFi hotspot, and click a shortcut on my home screen which pointed to it's DNS name (e.g. `http://wearware.local:5000`).  
+Historically, to control the shirt, I would connect my phone to the Pi's WiFi hotspot, and click a shortcut on my home screen which pointed to it's DNS name (e.g. `http://wearware.local:5000`) - in this case it's the Pi that is handling DNS resolution, not the phone.    
 However, when I connected my phone to the pi's hotspot, it would lose connection to the internet (It would try to route all data via the pi) - 
 Not what you want when you are trying to WhatsApp your mates to find out where they are...   
 If I connected the pi to my phone's hotspot, I would have to somehow find the pi's IP address, because Android cannot resolve `.local` hostnames.  
