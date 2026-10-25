@@ -29,6 +29,9 @@ class MainActivity : AppCompatActivity() {
                     .putExtra(ServiceWidgetSettings.EXTRA_SHORTCUT_MODE, true)
             )
         }
+        findViewById<View>(R.id.protocols_button).setOnClickListener {
+            startActivity(Intent(this, ProtocolsActivity::class.java))
+        }
     }
 
     private fun requestPinWidget() {

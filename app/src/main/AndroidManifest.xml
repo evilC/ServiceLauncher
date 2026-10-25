@@ -29,6 +29,10 @@
             </intent-filter>
         </activity>
         <activity
+            android:name=".ProtocolsActivity"
+            android:exported="false"
+            android:label="@string/protocols_title" />
+        <activity
             android:name=".ServiceWidgetConfigureActivity"
             android:excludeFromRecents="true"
             android:exported="true"

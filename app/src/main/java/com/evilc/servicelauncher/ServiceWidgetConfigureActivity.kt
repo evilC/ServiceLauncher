@@ -1,6 +1,7 @@
 package com.evilc.servicelauncher
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.appwidget.AppWidgetManager
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -22,6 +23,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ListView
+import android.widget.ScrollView
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
@@ -53,8 +55,10 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
     private var widgetId = AppWidgetManager.INVALID_APPWIDGET_ID
     private var shortcutMode = false
     private lateinit var sizeTitle: TextView
-    private var discoveryListener: NsdManager.DiscoveryListener? = null
+    private val discoveryListeners = mutableListOf<NsdManager.DiscoveryListener>()
     private var scanTimeout: Runnable? = null
+    private var selectedType = ServiceWidgetSettings.SERVICE_TYPE
+    private var scanFailureCount = 0
 
     private val localNetworkPermission =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -87,20 +91,22 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
 
     private fun loadExistingSettings() {
         val name = ServiceWidgetProvider.getServiceName(this, widgetId) ?: return
-        selectService(name)
+        selectedType = ServiceWidgetProvider.getServiceType(this, widgetId)
+        selectService(name, selectedType)
         labelInput.setText(ServiceWidgetProvider.getLabel(this, widgetId) ?: name)
         sizeSpinner.setSelection(ServiceWidgetProvider.getTextSize(this, widgetId).ordinal)
     }
 
-    private fun selectService(name: String) {
+    private fun selectService(name: String, type: String) {
         val previousDefault = defaultLabel()
-        if (name != selectedName) {
+        if (name != selectedName || type != selectedType) {
             stopMetadataLookup?.invoke()
             stopMetadataLookup = null
             metadataFor = null
             metadata = ServiceMetadata(null, null, null)
         }
         selectedName = name
+        selectedType = type
         setFormEnabled(true)
         val current = labelInput.text.toString()
         if (current.isBlank() || current == previousDefault) {
@@ -126,12 +132,15 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
     @Suppress("DEPRECATION")
     private fun lookUpMetadata() {
         val name = selectedName ?: return
-        val service = services.firstOrNull { it.serviceName == name } ?: return
-        if (metadataFor == name) return
-        metadataFor = name
+        val service = services.firstOrNull {
+            it.serviceName == name && it.serviceType == selectedType
+        } ?: return
+        val key = "$selectedType|$name"
+        if (metadataFor == key) return
+        metadataFor = key
 
         fun deliver(info: NsdServiceInfo) {
-            if (selectedName != name) return
+            if (selectedName != name || selectedType != service.serviceType) return
             val previousLabel = defaultLabel()
             metadata = ServiceMetadata.from(info.attributes)
             if (labelInput.text.isBlank() || labelInput.text.toString() == previousLabel) {
@@ -193,7 +202,9 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
     }
 
     private fun syncChecked() {
-        val index = services.indexOfFirst { it.serviceName == selectedName }
+        val index = services.indexOfFirst {
+            it.serviceName == selectedName && it.serviceType == selectedType
+        }
         if (index >= 0) list.setItemChecked(index, true) else list.clearChoices()
     }
 
@@ -236,7 +247,7 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
                 choiceMode = ListView.CHOICE_MODE_SINGLE
                 adapter = this@ServiceWidgetConfigureActivity.adapter
                 setOnItemClickListener { _, _, position, _ ->
-                    selectService(services[position].serviceName)
+                    selectService(services[position].serviceName, services[position].serviceType)
                 }
             }
             servicePanel.body().addView(list, LinearLayout.LayoutParams(
@@ -379,76 +390,95 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
         stopScan()
         services.clear()
         adapter.clear()
+        val types = ServiceTypes.enabled(this)
+        scanFailureCount = 0
+        if (types.isEmpty()) {
+            showStatus(R.string.no_protocols_enabled)
+            return
+        }
         showStatus(R.string.searching_for_services)
 
-        val listener = object : NsdManager.DiscoveryListener {
-            override fun onDiscoveryStarted(serviceType: String) = Unit
+        types.forEach { typeConfig ->
+            val listener = object : NsdManager.DiscoveryListener {
+                override fun onDiscoveryStarted(serviceType: String) = Unit
 
-            override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
-                stopScan()
-                showStatus(R.string.service_scan_failed)
-            }
-
-            override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
-                discoveryListener = null
-                showStatus(R.string.service_scan_failed)
-            }
-
-            override fun onDiscoveryStopped(serviceType: String) = Unit
-
-            override fun onServiceFound(serviceInfo: NsdServiceInfo) {
-                if (services.none { it.serviceName == serviceInfo.serviceName }) {
-                    services += serviceInfo
-                    adapter.add(serviceInfo.serviceName)
-                    status.visibility = View.GONE
-                    syncChecked()
-                    lookUpMetadata()
-                }
-            }
-
-            override fun onServiceLost(serviceInfo: NsdServiceInfo) {
-                val index = services.indexOfFirst { it.serviceName == serviceInfo.serviceName }
-                if (index >= 0) {
-                    services.removeAt(index)
-                    adapter.remove(serviceInfo.serviceName)
-                    syncChecked()
-                    if (services.isEmpty()) {
-                        showStatus(R.string.searching_for_services)
+                override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
+                    scanFailureCount++
+                    if (scanFailureCount == types.size && services.isEmpty()) {
+                        stopScan()
+                        showStatus(R.string.service_scan_failed)
                     }
                 }
+
+                override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
+                    showStatus(R.string.service_scan_failed)
+                }
+
+                override fun onDiscoveryStopped(serviceType: String) = Unit
+
+                override fun onServiceFound(serviceInfo: NsdServiceInfo) {
+                    if (services.none {
+                            it.serviceName == serviceInfo.serviceName &&
+                                it.serviceType == typeConfig.type
+                        }
+                    ) {
+                        services += serviceInfo
+                        adapter.add(typeConfig.displayName(serviceInfo.serviceName))
+                        status.visibility = View.GONE
+                        syncChecked()
+                        lookUpMetadata()
+                    }
+                }
+
+                override fun onServiceLost(serviceInfo: NsdServiceInfo) {
+                    val index = services.indexOfFirst {
+                        it.serviceName == serviceInfo.serviceName &&
+                            it.serviceType == typeConfig.type
+                    }
+                    if (index >= 0) {
+                        services.removeAt(index)
+                        adapter.remove(typeConfig.displayName(serviceInfo.serviceName))
+                        syncChecked()
+                        if (services.isEmpty()) {
+                            showStatus(R.string.searching_for_services)
+                        }
+                    }
+                }
+            }.onHandler(mainHandler)
+            discoveryListeners += listener
+            try {
+                nsdManager.discoverServices(
+                    typeConfig.type,
+                    NsdManager.PROTOCOL_DNS_SD,
+                    listener
+                )
+            } catch (exception: IllegalArgumentException) {
+                discoveryListeners.remove(listener)
+                scanFailureCount++
+                Log.w(TAG, "Could not scan for ${typeConfig.type}", exception)
             }
         }
 
-        val mainThreadListener = listener.onHandler(mainHandler)
-        discoveryListener = mainThreadListener
-        try {
-            nsdManager.discoverServices(
-                ServiceWidgetSettings.SERVICE_TYPE,
-                NsdManager.PROTOCOL_DNS_SD,
-                mainThreadListener
-            )
-            scanTimeout = Runnable {
-                stopScan()
-                if (services.isEmpty()) {
-                    showStatus(R.string.no_services_found)
-                }
-            }.also { mainHandler.postDelayed(it, SCAN_TIMEOUT_MS) }
-        } catch (exception: IllegalArgumentException) {
-            discoveryListener = null
+        if (types.isEmpty() || scanFailureCount == types.size) {
+            stopScan()
             showStatus(R.string.service_scan_failed)
+            return
         }
+        scanTimeout = Runnable {
+            stopScan()
+            if (services.isEmpty()) showStatus(R.string.no_services_found)
+        }.also { mainHandler.postDelayed(it, SCAN_TIMEOUT_MS) }
     }
 
     private fun stopScan() {
         scanTimeout?.let(mainHandler::removeCallbacks)
         scanTimeout = null
-        discoveryListener?.let { listener ->
-            discoveryListener = null
+        discoveryListeners.toList().forEach { listener ->
+            discoveryListeners.remove(listener)
             try {
                 nsdManager.stopServiceDiscovery(listener)
             } catch (exception: IllegalArgumentException) {
-                Log.w(TAG, "Could not stop HTTP service discovery", exception)
-                showStatus(R.string.service_scan_failed)
+                Log.w(TAG, "Could not stop service discovery", exception)
             }
         }
     }
@@ -462,6 +492,7 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
             ServiceShortcuts.requestPin(
                 this,
                 name,
+                selectedType,
                 shortcutLabel(name),
                 iconTextInput.text.toString().trim()
             )
@@ -478,7 +509,7 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
         stopScan()
         val label = labelInput.text.toString().trim().takeIf { it.isNotEmpty() && it != name }
         val textSize = WidgetTextSize.entries[sizeSpinner.selectedItemPosition]
-        ServiceWidgetProvider.saveSettings(this, widgetId, name, label, textSize)
+        ServiceWidgetProvider.saveSettings(this, widgetId, name, selectedType, label, textSize)
         val manager = AppWidgetManager.getInstance(this)
         ServiceWidgetProvider.updateWidget(this, manager, widgetId)
 

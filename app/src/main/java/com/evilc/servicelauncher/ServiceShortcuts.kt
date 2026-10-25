@@ -28,10 +28,16 @@ internal object ServiceShortcuts {
 
     fun isPinSupported(context: Context) = ShortcutManagerCompat.isRequestPinShortcutSupported(context)
 
-    fun requestPin(context: Context, serviceName: String, label: String, iconText: String): Boolean =
+    fun requestPin(
+        context: Context,
+        serviceName: String,
+        serviceType: String,
+        label: String,
+        iconText: String
+    ): Boolean =
         ShortcutManagerCompat.requestPinShortcut(
             context,
-            build(context, "pin_${UUID.randomUUID()}", serviceName, label, iconText),
+            build(context, "pin_${UUID.randomUUID()}", serviceName, serviceType, label, iconText),
             null
         )
 
@@ -39,6 +45,7 @@ internal object ServiceShortcuts {
         context: Context,
         id: String,
         serviceName: String,
+        serviceType: String,
         label: String,
         iconText: String
     ) =
@@ -50,6 +57,7 @@ internal object ServiceShortcuts {
                 Intent(context, ServiceLaunchActivity::class.java)
                     .setAction(Intent.ACTION_VIEW)
                     .putExtra(ServiceWidgetSettings.EXTRA_SERVICE_NAME, serviceName)
+                    .putExtra(ServiceWidgetSettings.EXTRA_SERVICE_TYPE, serviceType)
             )
             .build()
 

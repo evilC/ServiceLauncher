@@ -1,16 +1,23 @@
 package com.evilc.servicelauncher
 
 /** Default texts advertised by a service in its DNS-SD TXT record. */
-internal data class ServiceMetadata(val widgetText: String?, val iconText: String?, val iconLabel: String?) {
+internal data class ServiceMetadata(
+    val widgetText: String?,
+    val iconText: String?,
+    val iconLabel: String?,
+    val username: String? = null
+) {
     companion object {
         const val KEY_WIDGET_TEXT = "sl-wtext"
         const val KEY_ICON_TEXT = "sl-stext"
         const val KEY_ICON_LABEL = "sl-slabel"
+        const val KEY_USERNAME = "sl-username"
 
         fun from(attributes: Map<String, ByteArray?>) = ServiceMetadata(
             widgetText = attributes[KEY_WIDGET_TEXT].decode(),
             iconText = attributes[KEY_ICON_TEXT].decode(),
-            iconLabel = attributes[KEY_ICON_LABEL].decode()
+            iconLabel = attributes[KEY_ICON_LABEL].decode(),
+            username = attributes[KEY_USERNAME].decode()
         )
 
         private fun ByteArray?.decode() = this

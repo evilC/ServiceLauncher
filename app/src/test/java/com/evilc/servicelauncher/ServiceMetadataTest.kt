@@ -26,4 +26,10 @@ class ServiceMetadataTest {
         val metadata = ServiceMetadata.from(mapOf("sl-stext" to "Wear\\nWare".toByteArray()))
         assertEquals("Wear\nWare", metadata.iconText)
     }
+
+    @Test
+    fun readsUsername() {
+        val metadata = ServiceMetadata.from(mapOf("sl-username" to "pi".toByteArray()))
+        assertEquals("pi", metadata.username)
+    }
 }

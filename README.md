@@ -23,8 +23,30 @@ So... I made this app. I set up DNS-SD on the pi to advertise a "WearWare UI" se
 ## Disclaimer
 This app is 100% vibe coded. I did not write a single line of the code myself.
 
+### Supported protocols
+The following protocols are supported by default, and will be automatically mapped to a URI scheme when launching the service:
+- HTTP
+- HTTPS
+- SSH
+- SFTP
+- FTP
+- SMB
+- VNC
+
+Only HTTP is enabled by default, but the others can be enabled in the app's main screen.
+
+Custom protocols can be added by the user, and a URI scheme can be specified for each custom protocol.
+
 ### DNS-SD custom fields
 The default text and labels for widgets and shortcuts can be controlled by the device by using custom `txt-record` entries in the DNS-SD service advertisement.  
+
+#### Credentials
+| txt-record key | Purpose         |
+|----------------|-----------------|
+| sl-username    | Username to use |
+
+eg
+`<txt-record>sl-username=pi</txt-record>` would result in a URI of `ssh://pi@host:22` for an SSH service
 
 #### Shortcuts
 | txt-record key | Purpose                       |

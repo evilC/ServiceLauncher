@@ -29,9 +29,11 @@ internal object ServiceWidgetSettings {
     const val SERVICE_TYPE = "_http._tcp."
     const val EXTRA_WIDGET_ID = AppWidgetManager.EXTRA_APPWIDGET_ID
     const val EXTRA_SERVICE_NAME = "service_name"
+    const val EXTRA_SERVICE_TYPE = "service_type"
     const val EXTRA_SHORTCUT_MODE = "shortcut_mode"
 
     fun serviceNameKey(widgetId: Int) = "service_name_$widgetId"
+    fun serviceTypeKey(widgetId: Int) = "service_type_$widgetId"
     fun labelKey(widgetId: Int) = "label_$widgetId"
     fun textSizeKey(widgetId: Int) = "text_size_$widgetId"
 
@@ -61,6 +63,7 @@ class ServiceWidgetProvider : AppWidgetProvider() {
         context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE).edit {
             appWidgetIds.forEach {
                 remove(ServiceWidgetSettings.serviceNameKey(it))
+                remove(ServiceWidgetSettings.serviceTypeKey(it))
                 remove(ServiceWidgetSettings.labelKey(it))
                 remove(ServiceWidgetSettings.textSizeKey(it))
             }
@@ -78,11 +81,13 @@ class ServiceWidgetProvider : AppWidgetProvider() {
             context: Context,
             widgetId: Int,
             serviceName: String,
+            serviceType: String,
             label: String?,
             textSize: WidgetTextSize
         ) {
             context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE).edit {
                 putString(ServiceWidgetSettings.serviceNameKey(widgetId), serviceName)
+                putString(ServiceWidgetSettings.serviceTypeKey(widgetId), serviceType)
                 putString(ServiceWidgetSettings.labelKey(widgetId), label)
                 putString(ServiceWidgetSettings.textSizeKey(widgetId), textSize.name)
             }
@@ -91,6 +96,11 @@ class ServiceWidgetProvider : AppWidgetProvider() {
         fun getServiceName(context: Context, widgetId: Int): String? =
             context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
                 .getString(ServiceWidgetSettings.serviceNameKey(widgetId), null)
+
+        fun getServiceType(context: Context, widgetId: Int): String =
+            context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+                .getString(ServiceWidgetSettings.serviceTypeKey(widgetId), ServiceWidgetSettings.SERVICE_TYPE)
+                ?: ServiceWidgetSettings.SERVICE_TYPE
 
         fun getLabel(context: Context, widgetId: Int): String? =
             context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)

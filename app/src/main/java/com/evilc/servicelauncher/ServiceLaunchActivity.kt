@@ -2,6 +2,9 @@ package com.evilc.servicelauncher
 
 import android.appwidget.AppWidgetManager
 import android.content.ActivityNotFoundException
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.nsd.NsdManager
@@ -20,18 +23,32 @@ import androidx.core.net.toUri
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.Inet6Address
+import java.net.URLEncoder
 
 internal object ServiceEndpoint {
-    fun url(address: InetAddress, port: Int): String {
+    fun url(address: InetAddress, port: Int): String =
+        url("http://{host}:{port}/", address, port)
+
+    fun url(template: String, address: InetAddress, port: Int, username: String? = null): String {
+        val url = template.replace("{host}", formattedHost(address)).replace("{port}", port.toString())
+        val scheme = url.substringBefore("://").lowercase()
+        if (username.isNullOrBlank() || scheme == "http" || scheme == "https") return url
+        val encoded = URLEncoder.encode(username, "UTF-8").replace("+", "%20")
+        return url.replaceFirst("://", "://$encoded@")
+    }
+
+    fun endpoint(address: InetAddress, port: Int): String =
+        "${formattedHost(address)}:$port"
+
+    private fun formattedHost(address: InetAddress): String {
         val addressText = requireNotNull(address.hostAddress) {
             "Resolved address has no textual representation"
         }
-        val host = if (address is Inet6Address) {
+        return if (address is Inet6Address) {
             "[${addressText.replace("%", "%25")}]"
         } else {
             addressText
         }
-        return "http://$host:$port/"
     }
 }
 
@@ -39,6 +56,7 @@ class ServiceLaunchActivity : AppCompatActivity() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private lateinit var nsdManager: NsdManager
     private lateinit var serviceName: String
+    private lateinit var serviceType: String
     private var discoveryListener: NsdManager.DiscoveryListener? = null
     private var unregisterServiceInfoCallback: (() -> Unit)? = null
     private var timeout: Runnable? = null
@@ -71,6 +89,12 @@ class ServiceLaunchActivity : AppCompatActivity() {
                 fail(getString(R.string.widget_service_not_configured))
                 return
             }
+        serviceType = intent.getStringExtra(ServiceWidgetSettings.EXTRA_SERVICE_TYPE)
+            ?: if (widgetId != AppWidgetManager.INVALID_APPWIDGET_ID) {
+                ServiceWidgetProvider.getServiceType(this, widgetId)
+            } else {
+                ServiceWidgetSettings.SERVICE_TYPE
+            }
         nsdManager = getSystemService(NsdManager::class.java)
 
         if (Build.VERSION.SDK_INT >= LOCAL_NETWORK_PERMISSION_API &&
@@ -95,12 +119,15 @@ class ServiceLaunchActivity : AppCompatActivity() {
             }
 
             override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
-                Log.w(TAG, "Could not stop HTTP service discovery: $errorCode")
+                Log.w(TAG, "Could not stop $serviceType discovery: $errorCode")
             }
             override fun onDiscoveryStopped(serviceType: String) = Unit
 
             override fun onServiceFound(serviceInfo: NsdServiceInfo) {
-                if (!finished && serviceInfo.serviceName == serviceName) {
+                if (!finished &&
+                    serviceInfo.serviceName == serviceName &&
+                    serviceInfo.serviceType == serviceType
+                ) {
                     stopDiscovery()
                     resolveService(serviceInfo)
                 }
@@ -113,7 +140,7 @@ class ServiceLaunchActivity : AppCompatActivity() {
         discoveryListener = mainThreadListener
         try {
             nsdManager.discoverServices(
-                ServiceWidgetSettings.SERVICE_TYPE,
+                serviceType,
                 NsdManager.PROTOCOL_DNS_SD,
                 mainThreadListener
             )
@@ -184,7 +211,16 @@ class ServiceLaunchActivity : AppCompatActivity() {
             fail(getString(R.string.service_resolution_failed, serviceName))
             return
         }
-        openBrowser(ServiceEndpoint.url(address, serviceInfo.port))
+        val template = ServiceTypes.find(this, serviceType)?.urlTemplate
+        if (template == null) {
+            copyEndpointToClipboard(ServiceEndpoint.endpoint(address, serviceInfo.port))
+            return
+        }
+        val username = ServiceMetadata.from(serviceInfo.attributes).username
+        openService(
+            ServiceEndpoint.url(template, address, serviceInfo.port, username),
+            ServiceEndpoint.endpoint(address, serviceInfo.port)
+        )
     }
 
     @Suppress("DEPRECATION")
@@ -195,15 +231,25 @@ class ServiceLaunchActivity : AppCompatActivity() {
         return listOfNotNull(serviceInfo.host)
     }
 
-    private fun openBrowser(url: String) {
+    private fun openService(url: String, endpoint: String) {
         if (finished) return
         finished = true
         clearTimeout()
         try {
             startActivity(Intent(Intent.ACTION_VIEW, url.toUri()))
         } catch (_: ActivityNotFoundException) {
-            Toast.makeText(this, R.string.no_browser_available, Toast.LENGTH_LONG).show()
+            copyEndpointToClipboard(endpoint)
         }
+        finish()
+    }
+
+    private fun copyEndpointToClipboard(endpoint: String) {
+        if (finished) return
+        finished = true
+        clearTimeout()
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText(getString(R.string.app_name), endpoint))
+        Toast.makeText(this, R.string.endpoint_copied_to_clipboard, Toast.LENGTH_LONG).show()
         finish()
     }
 
@@ -233,7 +279,7 @@ class ServiceLaunchActivity : AppCompatActivity() {
             try {
                 nsdManager.stopServiceDiscovery(listener)
             } catch (exception: IllegalArgumentException) {
-                Log.w(TAG, "Could not stop HTTP service discovery", exception)
+                Log.w(TAG, "Could not stop $serviceType discovery", exception)
             }
         }
     }
@@ -244,7 +290,7 @@ class ServiceLaunchActivity : AppCompatActivity() {
             try {
                 unregister()
             } catch (exception: IllegalArgumentException) {
-                Log.w(TAG, "Could not unregister HTTP service info callback", exception)
+                Log.w(TAG, "Could not unregister $serviceType service info callback", exception)
             }
         }
     }
