@@ -20,6 +20,7 @@ import android.text.InputType
 import android.view.Gravity
 import android.widget.ArrayAdapter
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ListView
@@ -43,6 +44,7 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
     private lateinit var configForm: LinearLayout
     private lateinit var labelInput: EditText
     private lateinit var iconTextInput: EditText
+    private lateinit var appifyInput: CheckBox
     private var iconTextEdited = false
     private var updatingIconText = false
     private lateinit var sizeSpinner: Spinner
@@ -95,6 +97,7 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
         selectService(name, selectedType)
         labelInput.setText(ServiceWidgetProvider.getLabel(this, widgetId) ?: name)
         sizeSpinner.setSelection(ServiceWidgetProvider.getTextSize(this, widgetId).ordinal)
+        appifyInput.isChecked = ServiceWidgetProvider.getAppify(this, widgetId) && supportsAppify(selectedType)
     }
 
     private fun selectService(name: String, type: String) {
@@ -108,6 +111,9 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
         selectedName = name
         selectedType = type
         setFormEnabled(true)
+        val supportsAppify = supportsAppify(type)
+        appifyInput.visibility = if (supportsAppify) View.VISIBLE else View.GONE
+        if (!supportsAppify) appifyInput.isChecked = false
         val current = labelInput.text.toString()
         if (current.isBlank() || current == previousDefault) {
             labelInput.setText(defaultLabel())
@@ -261,6 +267,11 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
             })
 
             configForm = panel(R.string.settings_panel_title)
+            appifyInput = CheckBox(this@ServiceWidgetConfigureActivity).apply {
+                setText(R.string.appify_shortcut)
+                contentDescription = getString(R.string.appify_shortcut_description)
+            }
+            configForm.body().addView(appifyInput)
             labelInput = EditText(this@ServiceWidgetConfigureActivity).apply {
                 inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
                 minLines = 2
@@ -486,6 +497,11 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
     private fun shortcutLabel(name: String) =
         labelInput.text.toString().trim().replace(Regex("\\s+"), " ").ifEmpty { name }
 
+    private fun supportsAppify(type: String): Boolean =
+        ServiceTypes.find(this, type)?.urlTemplate
+            ?.substringBefore("://")
+            ?.lowercase() in setOf("http", "https")
+
     private fun createPinnedShortcut() {
         val name = selectedName ?: return
         if (ServiceShortcuts.isPinSupported(this) &&
@@ -494,7 +510,8 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
                 name,
                 selectedType,
                 shortcutLabel(name),
-                iconTextInput.text.toString().trim()
+                iconTextInput.text.toString().trim(),
+                appifyInput.isChecked
             )
         ) {
             stopScan()
@@ -509,7 +526,9 @@ class ServiceWidgetConfigureActivity : AppCompatActivity() {
         stopScan()
         val label = labelInput.text.toString().trim().takeIf { it.isNotEmpty() && it != name }
         val textSize = WidgetTextSize.entries[sizeSpinner.selectedItemPosition]
-        ServiceWidgetProvider.saveSettings(this, widgetId, name, selectedType, label, textSize)
+        ServiceWidgetProvider.saveSettings(
+            this, widgetId, name, selectedType, label, textSize, appifyInput.isChecked
+        )
         val manager = AppWidgetManager.getInstance(this)
         ServiceWidgetProvider.updateWidget(this, manager, widgetId)
 

@@ -7,6 +7,7 @@ Allows creation of Shortcuts and Widgets for discovered services, with the abili
 When adding a shortcut / widget, the app will scan the local network for available services and present them in a list for selection.  
 The shortcut / widget stores the service name, but not the IP address or port. 
 The IP and port are resolved at the point that you click the shortcut / widget, so that it always connects to the correct address even if the service's IP changes.
+HTTP and HTTPS shortcuts can optionally be marked **Appify** when created. Appified shortcuts show the page in a standalone WebView with JavaScript enabled, rather than opening the browser; other shortcuts and widgets keep the existing behavior. Cleartext HTTP is enabled for the app so discovered HTTP services can load in the WebView.
 
 ## Why does this exist?
 I designed and built my own LED screen T-Shirt (See the [WearWare](https://github.com/evilC/WearWare) project) which I wear to nightclubs.    

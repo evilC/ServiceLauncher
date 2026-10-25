@@ -13,6 +13,7 @@ import android.util.TypedValue
 import android.widget.RemoteViews
 import androidx.annotation.StringRes
 import androidx.core.content.edit
+import androidx.core.net.toUri
 
 enum class WidgetTextSize(@StringRes val labelRes: Int, val sp: Float?) {
     AUTO(R.string.text_size_auto, null),
@@ -31,11 +32,15 @@ internal object ServiceWidgetSettings {
     const val EXTRA_SERVICE_NAME = "service_name"
     const val EXTRA_SERVICE_TYPE = "service_type"
     const val EXTRA_SHORTCUT_MODE = "shortcut_mode"
+    const val EXTRA_APPIFY = "appify"
+    const val EXTRA_SHORTCUT_LABEL = "shortcut_label"
+    const val EXTRA_SHORTCUT_ICON_TEXT = "shortcut_icon_text"
 
     fun serviceNameKey(widgetId: Int) = "service_name_$widgetId"
     fun serviceTypeKey(widgetId: Int) = "service_type_$widgetId"
     fun labelKey(widgetId: Int) = "label_$widgetId"
     fun textSizeKey(widgetId: Int) = "text_size_$widgetId"
+    fun appifyKey(widgetId: Int) = "appify_$widgetId"
 
     fun displayText(label: String?, serviceName: String?): String? =
         label?.takeIf { it.isNotBlank() } ?: serviceName
@@ -66,6 +71,7 @@ class ServiceWidgetProvider : AppWidgetProvider() {
                 remove(ServiceWidgetSettings.serviceTypeKey(it))
                 remove(ServiceWidgetSettings.labelKey(it))
                 remove(ServiceWidgetSettings.textSizeKey(it))
+                remove(ServiceWidgetSettings.appifyKey(it))
             }
         }
     }
@@ -83,15 +89,21 @@ class ServiceWidgetProvider : AppWidgetProvider() {
             serviceName: String,
             serviceType: String,
             label: String?,
-            textSize: WidgetTextSize
+            textSize: WidgetTextSize,
+            appify: Boolean
         ) {
             context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE).edit {
                 putString(ServiceWidgetSettings.serviceNameKey(widgetId), serviceName)
                 putString(ServiceWidgetSettings.serviceTypeKey(widgetId), serviceType)
                 putString(ServiceWidgetSettings.labelKey(widgetId), label)
                 putString(ServiceWidgetSettings.textSizeKey(widgetId), textSize.name)
+                putBoolean(ServiceWidgetSettings.appifyKey(widgetId), appify)
             }
         }
+
+        fun getAppify(context: Context, widgetId: Int): Boolean =
+            context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
+                .getBoolean(ServiceWidgetSettings.appifyKey(widgetId), false)
 
         fun getServiceName(context: Context, widgetId: Int): String? =
             context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
@@ -164,6 +176,14 @@ class ServiceWidgetProvider : AppWidgetProvider() {
             }
             val launchIntent = Intent(context, target)
                 .putExtra(ServiceWidgetSettings.EXTRA_WIDGET_ID, widgetId)
+            if (serviceName != null && getAppify(context, widgetId)) {
+                launchIntent
+                    .putExtra(ServiceWidgetSettings.EXTRA_APPIFY, true)
+                    .putExtra(ServiceWidgetSettings.EXTRA_SHORTCUT_LABEL, text)
+                    .putExtra(ServiceWidgetSettings.EXTRA_SHORTCUT_ICON_TEXT, ServiceShortcuts.initials(text))
+                    .setData("servicelauncher://widget/$widgetId".toUri())
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
+            }
             val pendingIntent = PendingIntent.getActivity(
                 context,
                 widgetId,

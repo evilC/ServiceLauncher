@@ -1,12 +1,17 @@
 package com.evilc.servicelauncher
 
+import android.app.ActivityManager
 import android.appwidget.AppWidgetManager
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
+import android.graphics.Color
 import android.content.pm.PackageManager
+import android.graphics.drawable.Icon
+import android.net.Uri
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Build
@@ -14,12 +19,22 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import android.webkit.ValueCallback
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.Inet6Address
@@ -60,6 +75,15 @@ class ServiceLaunchActivity : AppCompatActivity() {
     private var discoveryListener: NsdManager.DiscoveryListener? = null
     private var unregisterServiceInfoCallback: (() -> Unit)? = null
     private var timeout: Runnable? = null
+    private var webView: WebView? = null
+    private var fileCallback: ValueCallback<Array<Uri>>? = null
+    private val fileChooser =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            fileCallback?.onReceiveValue(
+                WebChromeClient.FileChooserParams.parseResult(result.resultCode, result.data)
+            )
+            fileCallback = null
+        }
     private var finished = false
 
     private val localNetworkPermission =
@@ -73,6 +97,17 @@ class ServiceLaunchActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setAppifiedTaskDescription()
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                val currentWebView = webView
+                if (currentWebView?.canGoBack() == true) {
+                    currentWebView.goBack()
+                } else {
+                    finish()
+                }
+            }
+        })
         setContentView(TextView(this).apply {
             setPadding(48, 48, 48, 48)
             setText(R.string.resolving_service)
@@ -233,6 +268,63 @@ class ServiceLaunchActivity : AppCompatActivity() {
 
     private fun openService(url: String, endpoint: String) {
         if (finished) return
+        if (intent.getBooleanExtra(ServiceWidgetSettings.EXTRA_APPIFY, false)) {
+            finished = true
+            clearTimeout()
+            val serviceHost = url.toUri().host
+            val view = WebView(this).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                webChromeClient = object : WebChromeClient() {
+                    override fun onShowFileChooser(
+                        webView: WebView,
+                        callback: ValueCallback<Array<Uri>>,
+                        params: FileChooserParams
+                    ): Boolean {
+                        fileCallback?.onReceiveValue(null)
+                        fileCallback = callback
+                        return try {
+                            fileChooser.launch(params.createIntent())
+                            true
+                        } catch (_: ActivityNotFoundException) {
+                            fileCallback = null
+                            false
+                        }
+                    }
+                }
+                webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                        val target = request.url
+                        if (target.host.equals(serviceHost, ignoreCase = true)) return false
+                        try {
+                            startActivity(Intent(Intent.ACTION_VIEW, target))
+                        } catch (_: ActivityNotFoundException) {
+                        }
+                        return true
+                    }
+                }
+            }
+            webView = view
+            val container = FrameLayout(this).apply { addView(view) }
+            ViewCompat.setOnApplyWindowInsetsListener(container) { v, insets ->
+                val bars = insets.getInsets(
+                    WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout() or
+                        WindowInsetsCompat.Type.ime()
+                )
+                v.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+                WindowInsetsCompat.CONSUMED
+            }
+            setContentView(container)
+            val night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+                Configuration.UI_MODE_NIGHT_YES
+            WindowInsetsControllerCompat(window, container).apply {
+                isAppearanceLightStatusBars = !night
+                isAppearanceLightNavigationBars = !night
+            }
+            container.setBackgroundColor(if (night) Color.BLACK else Color.WHITE)
+            view.loadUrl(url)
+            return
+        }
         finished = true
         clearTimeout()
         try {
@@ -261,6 +353,18 @@ class ServiceLaunchActivity : AppCompatActivity() {
         stopServiceInfoCallback()
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
         finish()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun setAppifiedTaskDescription() {
+        if (!intent.getBooleanExtra(ServiceWidgetSettings.EXTRA_APPIFY, false)) return
+        val label = intent.getStringExtra(ServiceWidgetSettings.EXTRA_SHORTCUT_LABEL)
+            ?: getString(R.string.app_name)
+        val iconText = intent.getStringExtra(ServiceWidgetSettings.EXTRA_SHORTCUT_ICON_TEXT)
+            ?.ifBlank { ServiceShortcuts.initials(label) }
+            ?: ServiceShortcuts.initials(label)
+        val icon = ServiceShortcuts.createIcon(iconText)
+        setTaskDescription(ActivityManager.TaskDescription(label, icon))
     }
 
     private fun setTimeout(delayMs: Long, action: () -> Unit) {
@@ -299,6 +403,8 @@ class ServiceLaunchActivity : AppCompatActivity() {
         clearTimeout()
         stopDiscovery()
         stopServiceInfoCallback()
+        webView?.destroy()
+        webView = null
         super.onDestroy()
     }
 

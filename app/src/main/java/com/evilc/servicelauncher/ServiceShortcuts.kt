@@ -36,11 +36,12 @@ internal object ServiceShortcuts {
         serviceName: String,
         serviceType: String,
         label: String,
-        iconText: String
+        iconText: String,
+        appify: Boolean
     ): Boolean =
         ShortcutManagerCompat.requestPinShortcut(
             context,
-            build(context, "pin_${UUID.randomUUID()}", serviceName, serviceType, label, iconText),
+            build(context, "pin_${UUID.randomUUID()}", serviceName, serviceType, label, iconText, appify),
             null
         )
 
@@ -50,21 +51,29 @@ internal object ServiceShortcuts {
         serviceName: String,
         serviceType: String,
         label: String,
-        iconText: String
-    ) =
-        ShortcutInfoCompat.Builder(context, id)
+        iconText: String,
+        appify: Boolean
+    ): ShortcutInfoCompat {
+        val intent = Intent(context, ServiceLaunchActivity::class.java)
+            .setAction(Intent.ACTION_VIEW)
+            .putExtra(ServiceWidgetSettings.EXTRA_SERVICE_NAME, serviceName)
+            .putExtra(ServiceWidgetSettings.EXTRA_SERVICE_TYPE, serviceType)
+            .putExtra(ServiceWidgetSettings.EXTRA_APPIFY, appify)
+            .putExtra(ServiceWidgetSettings.EXTRA_SHORTCUT_LABEL, label)
+            .putExtra(ServiceWidgetSettings.EXTRA_SHORTCUT_ICON_TEXT, iconText)
+        if (appify) {
+            intent.data = android.net.Uri.parse("servicelauncher://shortcut/$id")
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_DOCUMENT)
+        }
+        return ShortcutInfoCompat.Builder(context, id)
             .setShortLabel(label)
             .setLongLabel(label)
             .setIcon(IconCompat.createWithAdaptiveBitmap(createIcon(iconText.ifBlank { initials(label) })))
-            .setIntent(
-                Intent(context, ServiceLaunchActivity::class.java)
-                    .setAction(Intent.ACTION_VIEW)
-                    .putExtra(ServiceWidgetSettings.EXTRA_SERVICE_NAME, serviceName)
-                    .putExtra(ServiceWidgetSettings.EXTRA_SERVICE_TYPE, serviceType)
-            )
+            .setIntent(intent)
             .build()
+    }
 
-    private fun createIcon(text: String): Bitmap {
+    fun createIcon(text: String): Bitmap {
         val bitmap = Bitmap.createBitmap(ICON_SIZE, ICON_SIZE, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
         canvas.drawColor(TILE_COLOR)

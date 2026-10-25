@@ -41,6 +41,8 @@
     <string name="save_widget">Save widget</string>
     <string name="create_icon">Create shortcut</string>
     <string name="icon_text_title">Icon text</string>
+    <string name="appify_shortcut">Appify</string>
+    <string name="appify_shortcut_description">Open this HTTP service in an app-like window instead of the browser.</string>
     <string name="pin_shortcut_unsupported">This launcher does not support adding shortcuts</string>
     <string name="add_shortcut">Add shortcut</string>
     <string name="cancel">Cancel</string>
