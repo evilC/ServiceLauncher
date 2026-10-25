@@ -16,6 +16,9 @@ internal object ServiceShortcuts {
     private const val ICON_SIZE = 432
     private const val TILE_COLOR = 0xFF455A64.toInt()
     private const val SAFE_FRACTION = 0.56f
+    // Text stays in the upper area so the launcher's bottom-right badge never covers it
+    private const val TEXT_HEIGHT_FRACTION = 0.42f
+    private const val TEXT_CENTER_Y_FRACTION = 0.43f
     private const val MIN_TEXT_PX = 20
     private const val MAX_TEXT_PX = 200
 
@@ -71,18 +74,19 @@ internal object ServiceShortcuts {
             textAlign = Paint.Align.CENTER
         }
         val safe = ICON_SIZE * SAFE_FRACTION
+        val textHeight = ICON_SIZE * TEXT_HEIGHT_FRACTION
         val size = TextFit.largestSize(
             text,
             MIN_TEXT_PX,
             MAX_TEXT_PX,
             safe,
-            safe,
+            textHeight,
             lineHeight = { paint.textSize = it.toFloat(); paint.fontSpacing },
             measure = { px, word -> paint.textSize = px.toFloat(); paint.measureText(word) }
         )
         paint.textSize = size.toFloat()
         val lines = wrap(text, safe, paint)
-        val top = (ICON_SIZE - lines.size * paint.fontSpacing) / 2f - paint.ascent()
+        val top = ICON_SIZE * TEXT_CENTER_Y_FRACTION - lines.size * paint.fontSpacing / 2f - paint.ascent()
         lines.forEachIndexed { index, line ->
             canvas.drawText(line, ICON_SIZE / 2f, top + index * paint.fontSpacing, paint)
         }
