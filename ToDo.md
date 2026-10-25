@@ -9,5 +9,5 @@ Currently, a widget or shortcut matches a service by name only. mDNS resolves na
 - At tap time, match by name first. If the match is ambiguous, or the name carries a conflict suffix, pick by hostname.
 - Compatibility: API 34 is Android 14 (October 2023). Below API 34 the app uses the deprecated `resolveService`, where the hostname may not be available, so matching would fall back to name only.
 
-# IPV4 / IPV6 selection
+## IPV4 / IPV6 selection
 - If a service advertises both IPv4 and IPv6, the app should allow the user to select which one to use. The default should be IPv4, but the user can change it
